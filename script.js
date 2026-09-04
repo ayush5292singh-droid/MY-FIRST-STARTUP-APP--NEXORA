@@ -1,6 +1,6 @@
 /* =========================================================
    NEXORA LOCAL INTELLIGENCE
-   Real OpenStreetMap + Overpass nearby search
+   REAL OpenStreetMap + Overpass Search
    ========================================================= */
 
 const state = {
@@ -68,6 +68,19 @@ const elements = {
 
 
 /* =========================================================
+   SAFE EVENT HELPER
+   ========================================================= */
+
+function on(id, event, callback) {
+  const el = $(id);
+
+  if (el) {
+    el.addEventListener(event, callback);
+  }
+}
+
+
+/* =========================================================
    PAGE NAVIGATION
    ========================================================= */
 
@@ -97,18 +110,17 @@ function showPage(page) {
     saved: "Your saved places."
   };
 
-  elements.pageTitle.textContent =
-    titles[page] || titles.home;
+  if (elements.pageTitle) {
+    elements.pageTitle.textContent =
+      titles[page] || titles.home;
+  }
 
   if (page === "explore") {
-
     setTimeout(() => {
-
       if (state.map) {
         state.map.invalidateSize();
       }
-
-    }, 150);
+    }, 200);
   }
 
   if (page === "helpers") {
@@ -130,7 +142,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
 });
 
 
-$("startExploreBtn").addEventListener("click", () => {
+on("startExploreBtn", "click", () => {
 
   showPage("explore");
 
@@ -141,9 +153,11 @@ $("startExploreBtn").addEventListener("click", () => {
 });
 
 
-$("heroLocateBtn").addEventListener("click", () => {
+on("heroLocateBtn", "click", () => {
+
   showPage("explore");
   locateUser();
+
 });
 
 
@@ -153,10 +167,18 @@ $("heroLocateBtn").addEventListener("click", () => {
 
 function initMap() {
 
+  if (!document.getElementById("map")) {
+    console.error("NEXORA: #map element not found.");
+    return;
+  }
+
   state.map = L.map("map", {
     zoomControl: true,
     attributionControl: true
-  }).setView([20.5937, 78.9629], 5);
+  }).setView(
+    [20.5937, 78.9629],
+    5
+  );
 
 
   L.tileLayer(
@@ -164,32 +186,42 @@ function initMap() {
     {
       maxZoom: 19,
       attribution:
-        '&copy; OpenStreetMap contributors'
+        "&copy; OpenStreetMap contributors"
     }
   ).addTo(state.map);
 
 }
 
 
+/* =========================================================
+   ICONS
+   ========================================================= */
+
 function createUserIcon() {
 
   return L.divIcon({
     className: "",
-    html: `<div class="user-location-marker"></div>`,
-    iconSize: [20,20],
-    iconAnchor: [10,10]
+    html: `
+      <div class="user-location-marker"></div>
+    `,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10]
   });
 
 }
 
 
-function createPlaceIcon() {
+function createPlaceIcon(number = "") {
 
   return L.divIcon({
     className: "",
-    html: `<div class="place-marker">●</div>`,
-    iconSize: [28,28],
-    iconAnchor: [14,14]
+    html: `
+      <div class="place-marker">
+        ${number}
+      </div>
+    `,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
   });
 
 }
@@ -217,16 +249,26 @@ function locateUser() {
     "loading"
   );
 
-  elements.topLocationText.textContent = "Locating...";
+
+  if (elements.topLocationText) {
+    elements.topLocationText.textContent =
+      "Locating...";
+  }
 
 
   navigator.geolocation.getCurrentPosition(
 
     position => {
 
-      const lat = position.coords.latitude;
-      const lon = position.coords.longitude;
-      const accuracy = position.coords.accuracy || 50;
+      const lat =
+        position.coords.latitude;
+
+      const lon =
+        position.coords.longitude;
+
+      const accuracy =
+        position.coords.accuracy || 50;
+
 
       state.userLocation = {
         lat,
@@ -239,17 +281,22 @@ function locateUser() {
 
       updateLocationText();
 
+
       setStatus(
         "Location ready",
         "ready"
       );
 
-      elements.topLocationText.textContent =
-        "Location ready";
+
+      if (elements.topLocationText) {
+        elements.topLocationText.textContent =
+          `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+      }
 
 
       if (
-        !$("explorePage").classList.contains("active")
+        elements.explorePage &&
+        !elements.explorePage.classList.contains("active")
       ) {
         showPage("explore");
       }
@@ -258,37 +305,51 @@ function locateUser() {
 
     error => {
 
-      console.error(error);
+      console.error(
+        "NEXORA location error:",
+        error
+      );
+
 
       let message =
-        "Location permission was not granted.";
+        "Location could not be found.";
+
 
       if (error.code === 1) {
         message =
           "Please allow location permission.";
       }
 
+
       if (error.code === 2) {
         message =
           "Your location could not be found.";
       }
+
 
       if (error.code === 3) {
         message =
           "Location request timed out.";
       }
 
-      setStatus(message, "error");
 
-      elements.topLocationText.textContent =
-        "Locate me";
+      setStatus(
+        message,
+        "error"
+      );
+
+
+      if (elements.topLocationText) {
+        elements.topLocationText.textContent =
+          "Locate me";
+      }
 
     },
 
     {
       enableHighAccuracy: true,
-      timeout: 15000,
-      maximumAge: 60000
+      timeout: 20000,
+      maximumAge: 30000
     }
 
   );
@@ -296,11 +357,19 @@ function locateUser() {
 }
 
 
+/* =========================================================
+   SHOW USER LOCATION
+   ========================================================= */
+
 function updateUserLocationOnMap() {
 
-  if (!state.map || !state.userLocation) {
+  if (
+    !state.map ||
+    !state.userLocation
+  ) {
     return;
   }
+
 
   const {
     lat,
@@ -310,44 +379,58 @@ function updateUserLocationOnMap() {
 
 
   if (state.userMarker) {
-    state.map.removeLayer(state.userMarker);
+    state.map.removeLayer(
+      state.userMarker
+    );
   }
+
 
   if (state.accuracyCircle) {
-    state.map.removeLayer(state.accuracyCircle);
+    state.map.removeLayer(
+      state.accuracyCircle
+    );
   }
 
 
-  state.userMarker = L.marker(
-    [lat, lon],
-    {
-      icon: createUserIcon(),
-      zIndexOffset: 1000
-    }
-  )
-  .addTo(state.map)
-  .bindPopup(
-    "<div class='popup-title'>YOU ARE HERE</div>" +
-    "<div class='popup-info'>" +
-    "Your current location</div>"
-  );
+  state.userMarker =
+    L.marker(
+      [lat, lon],
+      {
+        icon: createUserIcon(),
+        zIndexOffset: 2000
+      }
+    )
+    .addTo(state.map)
+    .bindPopup(`
+      <div class="popup-title">
+        YOU ARE HERE
+      </div>
+
+      <div class="popup-info">
+        Your current location
+      </div>
+    `);
 
 
-  state.accuracyCircle = L.circle(
-    [lat, lon],
-    {
-      radius: accuracy,
-      color: "#54f39a",
-      fillOpacity: .04,
-      weight: 1
-    }
-  ).addTo(state.map);
+  state.accuracyCircle =
+    L.circle(
+      [lat, lon],
+      {
+        radius: accuracy,
+        color: "#54f39a",
+        fillOpacity: 0.04,
+        weight: 1
+      }
+    )
+    .addTo(state.map);
 
 
   state.map.setView(
     [lat, lon],
     15,
-    { animate: true }
+    {
+      animate: true
+    }
   );
 
 }
@@ -359,15 +442,21 @@ function updateLocationText() {
     return;
   }
 
+
   const {
     lat,
     lon
   } = state.userLocation;
 
+
   const short =
     `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 
-  elements.sideLocation.textContent = short;
+
+  if (elements.sideLocation) {
+    elements.sideLocation.textContent =
+      short;
+  }
 
 }
 
@@ -376,107 +465,187 @@ function updateLocationText() {
    STATUS
    ========================================================= */
 
-function setStatus(message, type = "") {
+function setStatus(
+  message,
+  type = ""
+) {
 
-  elements.mapStatus.textContent = message;
-
-  elements.statusDot.className =
-    "status-dot";
-
-  if (type === "ready") {
-    elements.statusDot.classList.add("ready");
+  if (elements.mapStatus) {
+    elements.mapStatus.textContent =
+      message;
   }
 
-  if (type === "error") {
-    elements.statusDot.classList.add("error");
+
+  if (elements.statusDot) {
+
+    elements.statusDot.className =
+      "status-dot";
+
+
+    if (type === "ready") {
+      elements.statusDot.classList.add(
+        "ready"
+      );
+    }
+
+
+    if (type === "error") {
+      elements.statusDot.classList.add(
+        "error"
+      );
+    }
+
   }
 
 }
 
 
 /* =========================================================
-   SEARCH TERMS
+   SEARCH ALIASES
    ========================================================= */
 
-function getSearchTerms(searchText) {
+const SEARCH_PROFILES = {
 
-  const text =
-    (searchText || "")
-      .trim()
-      .toLowerCase();
-
-
-  if (!text) {
-    return [];
-  }
-
-
-  const aliases = {
-
-    pharmacy: [
-      "pharmacy",
-      "chemist",
-      "medical"
-    ],
-
-    plumber: [
-      "plumber",
-      "plumbing"
-    ],
-
-    electrician: [
-      "electrician",
-      "electrical"
-    ],
-
-    mechanic: [
-      "mechanic",
-      "auto repair",
-      "car repair"
-    ],
-
-    grocery: [
-      "grocery",
-      "supermarket",
-      "convenience"
-    ],
-
-    restaurant: [
-      "restaurant",
-      "food"
-    ],
-
-    hardware: [
-      "hardware",
-      "hardware shop"
+  pharmacy: {
+    label: "Pharmacy",
+    queries: [
+      `nwr["amenity"="pharmacy"]`,
+      `nwr["shop"="chemist"]`,
+      `nwr["healthcare"="pharmacy"]`,
+      `nwr["name"~"pharmacy|chemist|medical|medicine",i]`
     ]
+  },
 
-  };
+
+  plumber: {
+    label: "Plumber",
+    queries: [
+      `nwr["craft"="plumber"]`,
+      `nwr["service"~"plumb",i]`,
+      `nwr["name"~"plumber|plumbing",i]`
+    ]
+  },
 
 
-  if (aliases[text]) {
-    return aliases[text];
+  electrician: {
+    label: "Electrician",
+    queries: [
+      `nwr["craft"="electrician"]`,
+      `nwr["service"~"electric",i]`,
+      `nwr["name"~"electrician|electrical",i]`
+    ]
+  },
+
+
+  mechanic: {
+    label: "Mechanic",
+    queries: [
+      `nwr["shop"="car_repair"]`,
+      `nwr["shop"="motorcycle_repair"]`,
+      `nwr["craft"="mechanic"]`,
+      `nwr["service"~"repair|mechanic|auto",i]`,
+      `nwr["name"~"mechanic|auto repair|car repair|garage",i]`
+    ]
+  },
+
+
+  grocery: {
+    label: "Grocery",
+    queries: [
+      `nwr["shop"="supermarket"]`,
+      `nwr["shop"="convenience"]`,
+      `nwr["shop"="grocery"]`,
+      `nwr["shop"="greengrocer"]`,
+      `nwr["name"~"grocery|supermarket|mart",i]`
+    ]
+  },
+
+
+  restaurant: {
+    label: "Restaurant",
+    queries: [
+      `nwr["amenity"="restaurant"]`,
+      `nwr["amenity"="fast_food"]`,
+      `nwr["amenity"="cafe"]`,
+      `nwr["name"~"restaurant|cafe|food",i]`
+    ]
+  },
+
+
+  hardware: {
+    label: "Hardware",
+    queries: [
+      `nwr["shop"="hardware"]`,
+      `nwr["name"~"hardware",i]`
+    ]
+  },
+
+
+  hospital: {
+    label: "Hospital",
+    queries: [
+      `nwr["amenity"="hospital"]`,
+      `nwr["healthcare"="hospital"]`,
+      `nwr["name"~"hospital",i]`
+    ]
+  },
+
+
+  hotel: {
+    label: "Hotel",
+    queries: [
+      `nwr["tourism"="hotel"]`,
+      `nwr["tourism"="guest_house"]`,
+      `nwr["name"~"hotel|inn",i]`
+    ]
+  },
+
+
+  bank: {
+    label: "Bank",
+    queries: [
+      `nwr["amenity"="bank"]`,
+      `nwr["name"~"bank",i]`
+    ]
+  },
+
+
+  petrol: {
+    label: "Petrol Station",
+    queries: [
+      `nwr["amenity"="fuel"]`,
+      `nwr["name"~"petrol|fuel|gas",i]`
+    ]
+  },
+
+
+  school: {
+    label: "School",
+    queries: [
+      `nwr["amenity"="school"]`,
+      `nwr["name"~"school",i]`
+    ]
   }
 
-
-  return text
-    .split(/[,\s]+/)
-    .filter(Boolean)
-    .slice(0, 5);
-
-}
+};
 
 
-function escapeRegex(value) {
+/* =========================================================
+   NORMALIZE SEARCH
+   ========================================================= */
 
-  return String(value)
-    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function normalizeSearch(text) {
+
+  return String(text || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 
 }
 
 
 /* =========================================================
-   OVERPASS QUERY
+   BUILD OVERPASS QUERY
    ========================================================= */
 
 function buildOverpassQuery(
@@ -484,38 +653,89 @@ function buildOverpassQuery(
   radius
 ) {
 
+  if (!state.userLocation) {
+    throw new Error(
+      "Location required."
+    );
+  }
+
+
   const {
     lat,
     lon
   } = state.userLocation;
 
 
-  const terms =
-    getSearchTerms(searchText);
+  const search =
+    normalizeSearch(searchText);
 
 
   /*
-    Empty search means "everything nearby".
+    EVERYTHING
   */
 
-  if (!terms.length) {
+  if (
+    !search ||
+    search === "everything" ||
+    search === "all" ||
+    search === "nearby"
+  ) {
 
     return `
-[out:json][timeout:30];
+[out:json][timeout:35];
 
 (
   nwr["name"](around:${radius},${lat},${lon});
   nwr["shop"](around:${radius},${lat},${lon});
   nwr["amenity"](around:${radius},${lat},${lon});
   nwr["craft"](around:${radius},${lat},${lon});
-  nwr["office"](around:${radius},${lat},${lon});
   nwr["healthcare"](around:${radius},${lat},${lon});
+  nwr["tourism"](around:${radius},${lat},${lon});
 );
 
 out center tags;
 `;
 
   }
+
+
+  /*
+    KNOWN CATEGORY
+  */
+
+  if (SEARCH_PROFILES[search]) {
+
+    const queries =
+      SEARCH_PROFILES[search]
+        .queries
+        .map(q =>
+          `${q}(around:${radius},${lat},${lon});`
+        )
+        .join("\n");
+
+
+    return `
+[out:json][timeout:35];
+
+(
+${queries}
+);
+
+out center tags;
+`;
+
+  }
+
+
+  /*
+    CUSTOM SEARCH
+  */
+
+  const terms =
+    search
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .slice(0, 5);
 
 
   const regex =
@@ -525,20 +745,16 @@ out center tags;
 
 
   return `
-[out:json][timeout:30];
+[out:json][timeout:35];
 
 (
   nwr["name"~"${regex}",i"](around:${radius},${lat},${lon});
-
   nwr["shop"~"${regex}",i"](around:${radius},${lat},${lon});
-
   nwr["amenity"~"${regex}",i"](around:${radius},${lat},${lon});
-
   nwr["craft"~"${regex}",i"](around:${radius},${lat},${lon});
-
-  nwr["office"~"${regex}",i"](around:${radius},${lat},${lon});
-
   nwr["healthcare"~"${regex}",i"](around:${radius},${lat},${lon});
+  nwr["tourism"~"${regex}",i"](around:${radius},${lat},${lon});
+  nwr["office"~"${regex}",i"](around:${radius},${lat},${lon});
 );
 
 out center tags;
@@ -548,7 +764,7 @@ out center tags;
 
 
 /* =========================================================
-   SEARCH
+   OVERPASS SEARCH
    ========================================================= */
 
 async function searchPlaces() {
@@ -567,28 +783,51 @@ async function searchPlaces() {
 
 
   const searchText =
-    elements.searchInput.value.trim();
+    elements.searchInput?.value.trim() || "";
 
 
-  const radius =
-    Number(elements.distanceFilter.value);
+  /*
+    Your HTML distance filter is in KM.
+    Convert it to METERS for Overpass.
+  */
+
+  let radiusKm =
+    Number(
+      elements.distanceFilter?.value || 5
+    );
+
+
+  if (!Number.isFinite(radiusKm)) {
+    radiusKm = 5;
+  }
+
+
+  const radiusMeters =
+    Math.round(
+      radiusKm * 1000
+    );
 
 
   const minRating =
-    Number(elements.ratingFilter.value);
+    Number(
+      elements.ratingFilter?.value || 0
+    );
 
 
   const availability =
-    elements.availabilityFilter.value;
+    elements.availabilityFilter?.value ||
+    "any";
 
 
   showLoading(
-    "Finding nearby places..."
+    `Finding ${searchText || "places"} nearby...`
   );
 
 
-  elements.searchStatus.textContent =
-    "Searching real map data...";
+  if (elements.searchStatus) {
+    elements.searchStatus.textContent =
+      "Searching real OpenStreetMap data...";
+  }
 
 
   try {
@@ -597,6 +836,7 @@ async function searchPlaces() {
       state.searchController.abort();
     }
 
+
     state.searchController =
       new AbortController();
 
@@ -604,14 +844,13 @@ async function searchPlaces() {
     const query =
       buildOverpassQuery(
         searchText,
-        radius
+        radiusMeters
       );
 
 
     /*
-      Multiple public Overpass endpoints are tried.
-      This makes the search more resilient if one endpoint
-      is temporarily busy.
+      Public Overpass servers.
+      If one is busy, try the next.
     */
 
     const endpoints = [
@@ -629,15 +868,27 @@ async function searchPlaces() {
     let lastError = null;
 
 
-    for (const endpoint of endpoints) {
+    for (
+      const endpoint of endpoints
+    ) {
 
       try {
+
+        if (elements.searchStatus) {
+          elements.searchStatus.textContent =
+            "Connecting to map data...";
+        }
+
 
         const response =
           await fetch(
             endpoint,
             {
               method: "POST",
+              headers: {
+                "Content-Type":
+                  "text/plain;charset=UTF-8"
+              },
               body: query,
               signal:
                 state.searchController.signal
@@ -646,21 +897,39 @@ async function searchPlaces() {
 
 
         if (!response.ok) {
+
           throw new Error(
-            `Overpass HTTP ${response.status}`
+            `Server returned HTTP ${response.status}`
           );
+
         }
 
 
-        data = await response.json();
+        const json =
+          await response.json();
 
-        if (data && data.elements) {
+
+        if (
+          json &&
+          Array.isArray(json.elements)
+        ) {
+
+          data = json;
+
           break;
+
         }
+
 
       } catch (error) {
 
         lastError = error;
+
+        console.warn(
+          "Overpass endpoint failed:",
+          endpoint,
+          error
+        );
 
       }
 
@@ -668,41 +937,48 @@ async function searchPlaces() {
 
 
     if (!data) {
-      throw lastError ||
-        new Error("Search failed.");
+
+      throw (
+        lastError ||
+        new Error(
+          "All map servers failed."
+        )
+      );
+
     }
 
 
     let places =
-      parsePlaces(data.elements || []);
+      parsePlaces(
+        data.elements || []
+      );
 
 
-    places =
-      places.filter(place => {
+    /*
+      Rating filter:
+      Only filter out a place if an actual rating exists
+      and is below the selected rating.
 
-        if (
-          minRating > 0 &&
-          place.rating !== null &&
-          place.rating < minRating
-        ) {
-          return false;
-        }
+      This prevents the whole result list disappearing
+      just because OSM has no rating.
+    */
 
-        /*
-          If rating isn't available, don't falsely reject
-          the place because OSM has no rating.
-        */
+    if (minRating > 0) {
 
-        if (
-          minRating > 0 &&
-          place.rating === null
-        ) {
-          return false;
-        }
+      places =
+        places.filter(place => {
 
-        return true;
+          if (place.rating === null) {
+            return true;
+          }
 
-      });
+          return (
+            place.rating >= minRating
+          );
+
+        });
+
+    }
 
 
     places =
@@ -712,14 +988,46 @@ async function searchPlaces() {
       );
 
 
-    places.sort(
-      (a,b) =>
+    /*
+      Relevance first for category searches,
+      distance second.
+    */
+
+    const normalizedSearch =
+      normalizeSearch(searchText);
+
+
+    places.sort((a, b) => {
+
+      const aScore =
+        getRelevanceScore(
+          a,
+          normalizedSearch
+        );
+
+
+      const bScore =
+        getRelevanceScore(
+          b,
+          normalizedSearch
+        );
+
+
+      if (bScore !== aScore) {
+        return bScore - aScore;
+      }
+
+
+      return (
         a.distance -
         b.distance
-    );
+      );
+
+    });
 
 
-    state.places = places;
+    state.places =
+      places;
 
 
     renderMapMarkers();
@@ -727,20 +1035,39 @@ async function searchPlaces() {
     renderResults();
 
 
-    elements.searchStatus.textContent =
+    if (elements.searchStatus) {
+
+      elements.searchStatus.textContent =
+        places.length
+          ? `${places.length} real places found`
+          : "No matching places found";
+
+    }
+
+
+    setStatus(
       places.length
-        ? `${places.length} places found`
-        : "No matching places found";
+        ? `${places.length} places found nearby`
+        : "No places found in this area",
+      places.length
+        ? "ready"
+        : ""
+    );
 
 
   } catch (error) {
 
-    if (error.name === "AbortError") {
+    if (
+      error.name === "AbortError"
+    ) {
       return;
     }
 
 
-    console.error(error);
+    console.error(
+      "NEXORA SEARCH ERROR:",
+      error
+    );
 
 
     state.places = [];
@@ -750,11 +1077,14 @@ async function searchPlaces() {
     renderResults();
 
 
-    elements.searchStatus.textContent =
-      "Search failed. Try again.";
+    if (elements.searchStatus) {
+      elements.searchStatus.textContent =
+        "Map search failed. Please try again.";
+    }
+
 
     setStatus(
-      "Map search temporarily unavailable.",
+      "Map data server is temporarily unavailable.",
       "error"
     );
 
@@ -768,33 +1098,100 @@ async function searchPlaces() {
 
 
 /* =========================================================
-   PARSE OSM RESULTS
+   RELEVANCE
    ========================================================= */
 
-function parsePlaces(elementsArray) {
+function getRelevanceScore(
+  place,
+  search
+) {
+
+  if (!search) {
+    return 0;
+  }
+
+
+  let score = 0;
+
+
+  const name =
+    place.name.toLowerCase();
+
+
+  const category =
+    place.category.toLowerCase();
+
+
+  if (name === search) {
+    score += 100;
+  }
+
+
+  if (
+    name.includes(search)
+  ) {
+    score += 60;
+  }
+
+
+  if (
+    category.includes(search)
+  ) {
+    score += 50;
+  }
+
+
+  if (
+    place.searchText.includes(search)
+  ) {
+    score += 30;
+  }
+
+
+  return score;
+
+}
+
+
+/* =========================================================
+   PARSE OSM
+   ========================================================= */
+
+function parsePlaces(
+  elementsArray
+) {
 
   const seen = new Set();
+
   const places = [];
 
 
-  for (const element of elementsArray) {
+  for (
+    const element
+    of elementsArray
+  ) {
 
-    const tags = element.tags || {};
+    const tags =
+      element.tags || {};
 
 
     const lat =
-      element.lat ??
-      element.center?.lat;
+      Number(
+        element.lat ??
+        element.center?.lat
+      );
 
 
     const lon =
-      element.lon ??
-      element.center?.lon;
+      Number(
+        element.lon ??
+        element.center?.lon
+      );
 
 
     if (
-      typeof lat !== "number" ||
-      typeof lon !== "number"
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon)
     ) {
       continue;
     }
@@ -803,6 +1200,7 @@ function parsePlaces(elementsArray) {
     const name =
       tags.name ||
       tags["name:en"] ||
+      tags["name:hi"] ||
       "Unnamed place";
 
 
@@ -813,6 +1211,7 @@ function parsePlaces(elementsArray) {
     if (seen.has(id)) {
       continue;
     }
+
 
     seen.add(id);
 
@@ -845,6 +1244,7 @@ function parsePlaces(elementsArray) {
     const phone =
       tags.phone ||
       tags["contact:phone"] ||
+      tags["phone:mobile"] ||
       "";
 
 
@@ -852,6 +1252,21 @@ function parsePlaces(elementsArray) {
       tags.website ||
       tags["contact:website"] ||
       "";
+
+
+    const searchText =
+      [
+        name,
+        tags.shop,
+        tags.amenity,
+        tags.craft,
+        tags.healthcare,
+        tags.tourism,
+        tags.service
+      ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
 
 
     places.push({
@@ -878,6 +1293,8 @@ function parsePlaces(elementsArray) {
 
       website,
 
+      searchText,
+
       tags
 
     });
@@ -896,25 +1313,47 @@ function parsePlaces(elementsArray) {
 
 function getCategory(tags) {
 
-  if (tags.amenity) {
-    return prettify(tags.amenity);
+  if (tags.craft) {
+    return prettify(
+      tags.craft
+    );
   }
+
+
+  if (tags.amenity) {
+    return prettify(
+      tags.amenity
+    );
+  }
+
 
   if (tags.shop) {
-    return prettify(tags.shop);
+    return prettify(
+      tags.shop
+    );
   }
 
-  if (tags.craft) {
-    return prettify(tags.craft);
-  }
 
   if (tags.healthcare) {
-    return prettify(tags.healthcare);
+    return prettify(
+      tags.healthcare
+    );
   }
 
-  if (tags.office) {
-    return prettify(tags.office);
+
+  if (tags.tourism) {
+    return prettify(
+      tags.tourism
+    );
   }
+
+
+  if (tags.office) {
+    return prettify(
+      tags.office
+    );
+  }
+
 
   return "Place";
 
@@ -925,7 +1364,9 @@ function prettify(value) {
 
   return String(value)
     .replace(/_/g, " ")
-    .replace(/\b\w/g, c => c.toUpperCase());
+    .replace(/\b\w/g, c =>
+      c.toUpperCase()
+    );
 
 }
 
@@ -936,7 +1377,7 @@ function prettify(value) {
 
 function getRating(tags) {
 
-  const possible = [
+  const values = [
 
     tags.rating,
 
@@ -949,7 +1390,10 @@ function getRating(tags) {
   ];
 
 
-  for (const value of possible) {
+  for (
+    const value
+    of values
+  ) {
 
     const number =
       parseFloat(value);
@@ -960,7 +1404,9 @@ function getRating(tags) {
       number >= 0 &&
       number <= 5
     ) {
+
       return number;
+
     }
 
   }
@@ -1005,21 +1451,31 @@ function applyAvailabilityFilter(
   filter
 ) {
 
-  if (filter === "any") {
+  if (
+    filter === "any" ||
+    !filter
+  ) {
+
     return places;
+
   }
 
 
-  if (filter === "known") {
+  if (
+    filter === "known"
+  ) {
 
     return places.filter(
-      place => place.opening.known
+      place =>
+        place.opening.known
     );
 
   }
 
 
-  if (filter === "open") {
+  if (
+    filter === "open"
+  ) {
 
     return places.filter(
       place =>
@@ -1037,10 +1493,9 @@ function applyAvailabilityFilter(
 }
 
 
-/*
-  This handles common simple opening-hours formats.
-  Complex OSM schedules are left as "check hours".
-*/
+/* =========================================================
+   BASIC OPENING HOURS CHECK
+   ========================================================= */
 
 function isOpenNow(hours) {
 
@@ -1083,14 +1538,7 @@ function isOpenNow(hours) {
 
 
   if (!matches) {
-
-    /*
-      We cannot safely interpret every OSM schedule.
-      Don't pretend it is open.
-    */
-
     return false;
-
   }
 
 
@@ -1105,10 +1553,12 @@ function isOpenNow(hours) {
 
 
   if (end < start) {
+
     return (
       current >= start ||
       current <= end
     );
+
   }
 
 
@@ -1133,6 +1583,8 @@ function buildAddress(tags) {
     tags["addr:street"],
 
     tags["addr:suburb"],
+
+    tags["addr:neighbourhood"],
 
     tags["addr:city"],
 
@@ -1166,17 +1618,25 @@ function calculateDistance(
 
 
   const dLat =
-    toRadians(lat2 - lat1);
+    toRadians(
+      lat2 - lat1
+    );
 
 
   const dLon =
-    toRadians(lon2 - lon1);
+    toRadians(
+      lon2 - lon1
+    );
 
 
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRadians(lat1)) *
-    Math.cos(toRadians(lat2)) *
+    Math.cos(
+      toRadians(lat1)
+    ) *
+    Math.cos(
+      toRadians(lat2)
+    ) *
     Math.sin(dLon / 2) ** 2;
 
 
@@ -1195,9 +1655,11 @@ function calculateDistance(
 
 function toRadians(value) {
 
-  return value *
+  return (
+    value *
     Math.PI /
-    180;
+    180
+  );
 
 }
 
@@ -1205,8 +1667,13 @@ function toRadians(value) {
 function formatDistance(km) {
 
   if (km < 1) {
-    return `${Math.round(km * 1000)} m`;
+
+    return `${
+      Math.round(km * 1000)
+    } m`;
+
   }
+
 
   return `${km.toFixed(1)} km`;
 
@@ -1219,9 +1686,23 @@ function formatDistance(km) {
 
 function clearPlaceMarkers() {
 
+  if (!state.map) {
+    return;
+  }
+
+
   state.placeMarkers.forEach(
-    marker => state.map.removeLayer(marker)
+    marker => {
+
+      try {
+        state.map.removeLayer(
+          marker
+        );
+      } catch (_) {}
+
+    }
   );
+
 
   state.placeMarkers = [];
 
@@ -1238,43 +1719,51 @@ function renderMapMarkers() {
   clearPlaceMarkers();
 
 
-  state.places.forEach(place => {
+  state.places.forEach(
+    (place, index) => {
 
-    const marker =
-      L.marker(
-        [place.lat, place.lon],
-        {
-          icon: createPlaceIcon()
+      const marker =
+        L.marker(
+          [
+            place.lat,
+            place.lon
+          ],
+          {
+            icon:
+              createPlaceIcon(
+                index + 1
+              )
+          }
+        )
+        .addTo(state.map);
+
+
+      marker.bindPopup(
+        createPopup(place)
+      );
+
+
+      marker.on(
+        "click",
+        () => {
+
+          state.selectedPlace =
+            place;
+
+          highlightResult(
+            place.id
+          );
+
         }
-      )
-      .addTo(state.map);
+      );
 
 
-    marker.bindPopup(
-      createPopup(place)
-    );
+      state.placeMarkers.push(
+        marker
+      );
 
-
-    marker.on(
-      "click",
-      () => {
-
-        state.selectedPlace =
-          place;
-
-        highlightResult(
-          place.id
-        );
-
-      }
-    );
-
-
-    state.placeMarkers.push(
-      marker
-    );
-
-  });
+    }
+  );
 
 
   if (
@@ -1283,6 +1772,7 @@ function renderMapMarkers() {
   ) {
 
     const points = [
+
       [
         state.userLocation.lat,
         state.userLocation.lon
@@ -1301,7 +1791,7 @@ function renderMapMarkers() {
     state.map.fitBounds(
       L.latLngBounds(points),
       {
-        padding: [35,35],
+        padding: [35, 35],
         maxZoom: 16
       }
     );
@@ -1309,11 +1799,19 @@ function renderMapMarkers() {
   }
 
 
-  elements.mapPlaceCount.textContent =
-    `${state.places.length} places`;
+  if (elements.mapPlaceCount) {
+
+    elements.mapPlaceCount.textContent =
+      `${state.places.length} places`;
+
+  }
 
 }
 
+
+/* =========================================================
+   POPUP
+   ========================================================= */
 
 function createPopup(place) {
 
@@ -1326,14 +1824,31 @@ function createPopup(place) {
     <div class="popup-info">
 
       ${escapeHTML(place.category)}
+
       <br>
 
-      ${formatDistance(place.distance)}
+      📍 ${formatDistance(
+        place.distance
+      )}
 
       ${
         place.rating !== null
-          ? `<br>⭐ ${place.rating.toFixed(1)} / 5`
-          : ""
+          ? `
+            <br>
+            ⭐ ${place.rating.toFixed(1)} / 5
+          `
+          : `
+            <br>
+            ⭐ Rating unavailable
+          `
+      }
+
+      <br>
+
+      ${
+        place.opening.known
+          ? "🕐 Hours listed"
+          : "🕐 Hours unavailable"
       }
 
     </div>
@@ -1349,16 +1864,25 @@ function createPopup(place) {
 
 function renderResults() {
 
+  if (!elements.resultsList) {
+    return;
+  }
+
+
   const places =
     state.places;
 
 
-  elements.resultCount.textContent =
-    `${places.length} ${
-      places.length === 1
-        ? "place"
-        : "places"
-    }`;
+  if (elements.resultCount) {
+
+    elements.resultCount.textContent =
+      `${places.length} ${
+        places.length === 1
+          ? "place"
+          : "places"
+      }`;
+
+  }
 
 
   if (!places.length) {
@@ -1367,19 +1891,37 @@ function renderResults() {
 
       <div class="empty-state">
 
-        <div class="empty-icon">⌕</div>
+        <div class="empty-icon">
+          ⌕
+        </div>
 
-        <h3>No places found</h3>
+        <h3>
+          No places found
+        </h3>
 
         <p>
-          Try increasing the radius,
-          changing your search,
-          or choosing another category.
+          Try another search or increase
+          the distance.
         </p>
+
+        <button
+          class="primary-btn"
+          id="emptyLocateBtn2"
+        >
+          USE MY LOCATION
+        </button>
 
       </div>
 
     `;
+
+
+    on(
+      "emptyLocateBtn2",
+      "click",
+      locateUser
+    );
+
 
     return;
 
@@ -1387,13 +1929,18 @@ function renderResults() {
 
 
   elements.resultsList.innerHTML =
-    places.map(
-      place => createResultCard(place)
-    ).join("");
+    places
+      .map(
+        place =>
+          createResultCard(place)
+      )
+      .join("");
 
 
   elements.resultsList
-    .querySelectorAll("[data-place-id]")
+    .querySelectorAll(
+      "[data-place-id]"
+    )
     .forEach(card => {
 
       card.addEventListener(
@@ -1401,10 +1948,13 @@ function renderResults() {
         event => {
 
           if (
-            event.target.closest("button")
+            event.target.closest(
+              "button"
+            )
           ) {
             return;
           }
+
 
           const place =
             state.places.find(
@@ -1412,6 +1962,7 @@ function renderResults() {
                 item.id ===
                 card.dataset.placeId
             );
+
 
           if (place) {
             focusPlace(place);
@@ -1424,12 +1975,17 @@ function renderResults() {
 
 
   elements.resultsList
-    .querySelectorAll("[data-action]")
+    .querySelectorAll(
+      "[data-action]"
+    )
     .forEach(button => {
 
       button.addEventListener(
         "click",
-        () => {
+        event => {
+
+          event.stopPropagation();
+
 
           const place =
             state.places.find(
@@ -1437,6 +1993,7 @@ function renderResults() {
                 item.id ===
                 button.dataset.placeId
             );
+
 
           if (!place) {
             return;
@@ -1447,17 +2004,23 @@ function renderResults() {
             button.dataset.action;
 
 
-          if (action === "details") {
+          if (
+            action === "details"
+          ) {
             openPlace(place);
           }
 
 
-          if (action === "directions") {
+          if (
+            action === "directions"
+          ) {
             openDirections(place);
           }
 
 
-          if (action === "save") {
+          if (
+            action === "save"
+          ) {
             toggleFavourite(place);
           }
 
@@ -1469,35 +2032,55 @@ function renderResults() {
 }
 
 
-function createResultCard(place) {
+/* =========================================================
+   RESULT CARD
+   ========================================================= */
+
+function createResultCard(
+  place
+) {
 
   const saved =
-    isFavourite(place.id);
+    isFavourite(
+      place.id
+    );
 
 
   const ratingHTML =
     place.rating !== null
-      ? `<span class="rating">
-           ★ ${place.rating.toFixed(1)}
-         </span>`
-      : `<span>Rating unavailable</span>`;
+      ? `
+        <span class="rating">
+          ★ ${place.rating.toFixed(1)}
+        </span>
+      `
+      : `
+        <span>
+          ★ No rating data
+        </span>
+      `;
 
 
   const openingHTML =
     place.opening.known
-      ? `<span class="open">
-           🕐 ${escapeHTML(place.opening.text)}
-         </span>`
-      : `<span>
-           🕐 Hours unavailable
-         </span>`;
+      ? `
+        <span class="open">
+          🕐 Hours listed
+        </span>
+      `
+      : `
+        <span>
+          🕐 Hours unavailable
+        </span>
+      `;
 
 
   return `
 
     <article
       class="result-card"
-      data-place-id="${escapeHTML(place.id)}"
+      data-place-id="${escapeHTML(
+        place.id
+      )}"
     >
 
       <div class="result-top">
@@ -1505,17 +2088,23 @@ function createResultCard(place) {
         <div>
 
           <div class="result-name">
-            ${escapeHTML(place.name)}
+            ${escapeHTML(
+              place.name
+            )}
           </div>
 
           <div class="result-type">
-            ${escapeHTML(place.category)}
+            ${escapeHTML(
+              place.category
+            )}
           </div>
 
         </div>
 
         <div class="result-distance">
-          ${formatDistance(place.distance)}
+          ${formatDistance(
+            place.distance
+          )}
         </div>
 
       </div>
@@ -1531,7 +2120,11 @@ function createResultCard(place) {
 
         <br>
 
-        📍 ${escapeHTML(place.address)}
+        📍 ${
+          escapeHTML(
+            place.address
+          )
+        }
 
       </div>
 
@@ -1540,23 +2133,33 @@ function createResultCard(place) {
 
         <button
           data-action="details"
-          data-place-id="${escapeHTML(place.id)}"
+          data-place-id="${escapeHTML(
+            place.id
+          )}"
         >
           DETAILS
         </button>
 
         <button
           data-action="directions"
-          data-place-id="${escapeHTML(place.id)}"
+          data-place-id="${escapeHTML(
+            place.id
+          )}"
         >
           DIRECTIONS
         </button>
 
         <button
           data-action="save"
-          data-place-id="${escapeHTML(place.id)}"
+          data-place-id="${escapeHTML(
+            place.id
+          )}"
         >
-          ${saved ? "★ SAVED" : "☆ SAVE"}
+          ${
+            saved
+              ? "★ SAVED"
+              : "☆ SAVE"
+          }
         </button>
 
       </div>
@@ -1581,9 +2184,14 @@ function focusPlace(place) {
   if (state.map) {
 
     state.map.setView(
-      [place.lat, place.lon],
+      [
+        place.lat,
+        place.lon
+      ],
       17,
-      { animate: true }
+      {
+        animate: true
+      }
     );
 
   }
@@ -1596,9 +2204,17 @@ function focusPlace(place) {
         const position =
           item.getLatLng();
 
+
         return (
-          Math.abs(position.lat - place.lat) < 0.000001 &&
-          Math.abs(position.lng - place.lon) < 0.000001
+          Math.abs(
+            position.lat -
+            place.lat
+          ) < 0.000001 &&
+
+          Math.abs(
+            position.lng -
+            place.lon
+          ) < 0.000001
         );
 
       }
@@ -1610,20 +2226,27 @@ function focusPlace(place) {
   }
 
 
-  highlightResult(place.id);
+  highlightResult(
+    place.id
+  );
 
 }
 
 
-function highlightResult(id) {
+function highlightResult(
+  id
+) {
 
   document
-    .querySelectorAll(".result-card")
+    .querySelectorAll(
+      ".result-card"
+    )
     .forEach(card => {
 
       card.classList.toggle(
         "selected",
-        card.dataset.placeId === id
+        card.dataset.placeId ===
+          id
       );
 
     });
@@ -1645,11 +2268,29 @@ function openPlace(place) {
     place.website
       ? `
         <a
-          href="${safeURL(place.website)}"
+          href="${safeURL(
+            place.website
+          )}"
           target="_blank"
           rel="noopener"
         >
-          Website
+          Open Website
+        </a>
+      `
+      : "Not listed";
+
+
+  const phone =
+    place.phone
+      ? `
+        <a
+          href="tel:${encodeURIComponent(
+            place.phone
+          )}"
+        >
+          ${escapeHTML(
+            place.phone
+          )}
         </a>
       `
       : "Not listed";
@@ -1659,12 +2300,22 @@ function openPlace(place) {
 
     <div class="place-detail">
 
-      <small>${escapeHTML(place.category)}</small>
+      <small>
+        ${escapeHTML(
+          place.category
+        )}
+      </small>
 
-      <h2>${escapeHTML(place.name)}</h2>
+      <h2>
+        ${escapeHTML(
+          place.name
+        )}
+      </h2>
 
       <div class="place-address">
-        📍 ${escapeHTML(place.address)}
+        📍 ${escapeHTML(
+          place.address
+        )}
       </div>
 
 
@@ -1672,10 +2323,14 @@ function openPlace(place) {
 
         <div class="detail-box">
 
-          <small>DISTANCE</small>
+          <small>
+            DISTANCE
+          </small>
 
           <strong>
-            ${formatDistance(place.distance)}
+            ${formatDistance(
+              place.distance
+            )}
           </strong>
 
         </div>
@@ -1683,7 +2338,9 @@ function openPlace(place) {
 
         <div class="detail-box">
 
-          <small>RATING</small>
+          <small>
+            RATING
+          </small>
 
           <strong>
             ${
@@ -1698,12 +2355,16 @@ function openPlace(place) {
 
         <div class="detail-box">
 
-          <small>OPENING INFO</small>
+          <small>
+            OPENING INFO
+          </small>
 
           <strong>
             ${
               place.opening.known
-                ? escapeHTML(place.opening.text)
+                ? escapeHTML(
+                    place.opening.text
+                  )
                 : "Not available"
             }
           </strong>
@@ -1713,14 +2374,12 @@ function openPlace(place) {
 
         <div class="detail-box">
 
-          <small>PHONE</small>
+          <small>
+            PHONE
+          </small>
 
           <strong>
-            ${
-              place.phone
-                ? escapeHTML(place.phone)
-                : "Not listed"
-            }
+            ${phone}
           </strong>
 
         </div>
@@ -1728,7 +2387,9 @@ function openPlace(place) {
 
         <div class="detail-box">
 
-          <small>WEBSITE</small>
+          <small>
+            WEBSITE
+          </small>
 
           <strong>
             ${website}
@@ -1739,7 +2400,9 @@ function openPlace(place) {
 
         <div class="detail-box">
 
-          <small>MAP COORDINATES</small>
+          <small>
+            MAP COORDINATES
+          </small>
 
           <strong>
             ${place.lat.toFixed(5)},
@@ -1778,66 +2441,92 @@ function openPlace(place) {
   `;
 
 
-  elements.placeModal.classList.add("show");
+  elements.placeModal.classList.add(
+    "show"
+  );
 
 
-  $("detailDirections")
-    .addEventListener(
-      "click",
-      () => openDirections(place)
-    );
+  on(
+    "detailDirections",
+    "click",
+    () => {
+      openDirections(place);
+    }
+  );
 
 
-  $("detailSave")
-    .addEventListener(
-      "click",
-      () => {
+  on(
+    "detailSave",
+    "click",
+    () => {
 
-        toggleFavourite(place);
+      toggleFavourite(place);
 
-        openPlace(place);
+      openPlace(place);
 
-      }
-    );
+    }
+  );
 
 }
 
 
+/* =========================================================
+   MODALS
+   ========================================================= */
+
 function closeModal(id) {
 
-  const modal = $(id);
+  const modal =
+    $(id);
+
 
   if (modal) {
-    modal.classList.remove("show");
+    modal.classList.remove(
+      "show"
+    );
   }
 
 }
 
 
-document.querySelectorAll("[data-close]")
+document
+  .querySelectorAll(
+    "[data-close]"
+  )
   .forEach(button => {
 
     button.addEventListener(
       "click",
       () => {
+
         closeModal(
           button.dataset.close
         );
+
       }
     );
 
   });
 
 
-document.querySelectorAll(".modal")
+document
+  .querySelectorAll(
+    ".modal"
+  )
   .forEach(modal => {
 
     modal.addEventListener(
       "click",
       event => {
 
-        if (event.target === modal) {
-          modal.classList.remove("show");
+        if (
+          event.target === modal
+        ) {
+
+          modal.classList.remove(
+            "show"
+          );
+
         }
 
       }
@@ -1850,11 +2539,16 @@ document.querySelectorAll(".modal")
    DIRECTIONS
    ========================================================= */
 
-function openDirections(place) {
+function openDirections(
+  place
+) {
 
   if (!state.userLocation) {
+
     locateUser();
+
     return;
+
   }
 
 
@@ -1872,8 +2566,7 @@ function openDirections(place) {
 
   window.open(
     url,
-    "_blank",
-    "noopener"
+    "_blank"
   );
 
 }
@@ -1886,17 +2579,22 @@ function openDirections(place) {
 function isFavourite(id) {
 
   return state.favourites.some(
-    place => place.id === id
+    place =>
+      place.id === id
   );
 
 }
 
 
-function toggleFavourite(place) {
+function toggleFavourite(
+  place
+) {
 
   const index =
     state.favourites.findIndex(
-      item => item.id === place.id
+      item =>
+        item.id ===
+        place.id
     );
 
 
@@ -1909,7 +2607,9 @@ function toggleFavourite(place) {
 
   } else {
 
-    state.favourites.push(place);
+    state.favourites.push(
+      place
+    );
 
   }
 
@@ -1923,12 +2623,18 @@ function toggleFavourite(place) {
 
 
   renderResults();
+
   renderFavourites();
 
 }
 
 
 function renderFavourites() {
+
+  if (!elements.favouritesList) {
+    return;
+  }
+
 
   const list =
     elements.favouritesList;
@@ -1940,9 +2646,13 @@ function renderFavourites() {
 
       <div class="empty-state">
 
-        <div class="empty-icon">★</div>
+        <div class="empty-icon">
+          ★
+        </div>
 
-        <h3>No favourites yet</h3>
+        <h3>
+          No favourites yet
+        </h3>
 
         <p>
           Search for a place and press SAVE.
@@ -1958,97 +2668,114 @@ function renderFavourites() {
 
 
   list.innerHTML =
-    state.favourites.map(
-      place => `
+    state.favourites
+      .map(
+        place => `
 
-        <div class="helper-card">
+          <div class="helper-card">
 
-          <h3>
-            ${escapeHTML(place.name)}
-          </h3>
+            <h3>
+              ${escapeHTML(
+                place.name
+              )}
+            </h3>
 
-          <div class="helper-service">
-            ${escapeHTML(place.category)}
+            <div class="helper-service">
+              ${escapeHTML(
+                place.category
+              )}
+            </div>
+
+            <p>
+              📍 ${escapeHTML(
+                place.address
+              )}
+            </p>
+
+            <div class="card-buttons">
+
+              <button
+                data-fav-open="${escapeHTML(
+                  place.id
+                )}"
+              >
+                VIEW
+              </button>
+
+              <button
+                data-fav-remove="${escapeHTML(
+                  place.id
+                )}"
+              >
+                REMOVE
+              </button>
+
+            </div>
+
           </div>
 
-          <p>
-            📍 ${escapeHTML(place.address)}
-          </p>
-
-          <div class="card-buttons">
-
-            <button
-              data-fav-open="${escapeHTML(place.id)}"
-            >
-              VIEW
-            </button>
-
-            <button
-              data-fav-remove="${escapeHTML(place.id)}"
-            >
-              REMOVE
-            </button>
-
-          </div>
-
-        </div>
-
-      `
-    ).join("");
+        `
+      )
+      .join("");
 
 
-  list.querySelectorAll(
-    "[data-fav-open]"
-  ).forEach(button => {
+  list
+    .querySelectorAll(
+      "[data-fav-open]"
+    )
+    .forEach(button => {
 
-    button.addEventListener(
-      "click",
-      () => {
+      button.addEventListener(
+        "click",
+        () => {
 
-        const place =
-          state.favourites.find(
-            item =>
-              item.id ===
-              button.dataset.favOpen
-          );
+          const place =
+            state.favourites.find(
+              item =>
+                item.id ===
+                button.dataset.favOpen
+            );
 
-        if (place) {
 
-          showPage("explore");
+          if (place) {
 
-          focusPlace(place);
+            showPage(
+              "explore"
+            );
 
-          openPlace(place);
+            focusPlace(
+              place
+            );
+
+            openPlace(
+              place
+            );
+
+          }
 
         }
+      );
 
-      }
-    );
-
-  });
+    });
 
 
-  list.querySelectorAll(
-    "[data-fav-remove]"
-  ).forEach(button => {
+  list
+    .querySelectorAll(
+      "[data-fav-remove]"
+    )
+    .forEach(button => {
 
-    button.addEventListener(
-      "click",
-      () => {
+      button.addEventListener(
+        "click",
+        () => {
 
-        const index =
-          state.favourites.findIndex(
-            item =>
-              item.id ===
-              button.dataset.favRemove
-          );
+          state.favourites =
+            state.favourites.filter(
+              item =>
+                item.id !==
+                button.dataset.favRemove
+            );
 
-        if (index >= 0) {
-
-          state.favourites.splice(
-            index,
-            1
-          );
 
           localStorage.setItem(
             "nexora_favourites",
@@ -2057,15 +2784,15 @@ function renderFavourites() {
             )
           );
 
+
           renderFavourites();
+
           renderResults();
 
         }
+      );
 
-      }
-    );
-
-  });
+    });
 
 }
 
@@ -2074,23 +2801,31 @@ function renderFavourites() {
    HELPERS
    ========================================================= */
 
-$("addHelperBtn")
-  .addEventListener(
-    "click",
-    () => {
+on(
+  "addHelperBtn",
+  "click",
+  () => {
 
+    if (elements.helperForm) {
       elements.helperForm.reset();
+    }
+
+
+    if (elements.helperModal) {
 
       elements.helperModal.classList.add(
         "show"
       );
 
     }
-  );
+
+  }
+);
 
 
-elements.helperForm
-  .addEventListener(
+if (elements.helperForm) {
+
+  elements.helperForm.addEventListener(
     "submit",
     event => {
 
@@ -2103,19 +2838,19 @@ elements.helperForm
           Date.now().toString(),
 
         name:
-          $("helperName").value.trim(),
+          $("helperName")?.value.trim() || "",
 
         service:
-          $("helperService").value.trim(),
+          $("helperService")?.value.trim() || "",
 
         phone:
-          $("helperPhone").value.trim(),
+          $("helperPhone")?.value.trim() || "",
 
         area:
-          $("helperArea").value.trim(),
+          $("helperArea")?.value.trim() || "",
 
         notes:
-          $("helperNotes").value.trim()
+          $("helperNotes")?.value.trim() || ""
 
       };
 
@@ -2143,13 +2878,23 @@ elements.helperForm
     }
   );
 
+}
+
 
 function renderHelpers() {
 
+  if (!elements.helpersList) {
+    return;
+  }
+
+
   const query =
-    ($("helperSearch").value || "")
-      .toLowerCase()
-      .trim();
+    (
+      $("helperSearch")?.value ||
+      ""
+    )
+    .toLowerCase()
+    .trim();
 
 
   const helpers =
@@ -2168,7 +2913,9 @@ function renderHelpers() {
 
       <div class="empty-state">
 
-        <div class="empty-icon">♙</div>
+        <div class="empty-icon">
+          ♙
+        </div>
 
         <h3>
           ${
@@ -2179,8 +2926,9 @@ function renderHelpers() {
         </h3>
 
         <p>
-          Add trusted plumbers, electricians,
-          mechanics or other useful contacts.
+          Add trusted plumbers,
+          electricians, mechanics
+          or other contacts.
         </p>
 
       </div>
@@ -2193,61 +2941,87 @@ function renderHelpers() {
 
 
   elements.helpersList.innerHTML =
-    helpers.map(
-      helper => `
+    helpers
+      .map(
+        helper => `
 
-        <div class="helper-card">
+          <div class="helper-card">
 
-          <h3>
-            ${escapeHTML(helper.name)}
-          </h3>
+            <h3>
+              ${escapeHTML(
+                helper.name
+              )}
+            </h3>
 
-          <div class="helper-service">
-            ${escapeHTML(helper.service || "Helper")}
-          </div>
+            <div class="helper-service">
+              ${escapeHTML(
+                helper.service ||
+                "Helper"
+              )}
+            </div>
 
-          <p>
-            📍 ${escapeHTML(helper.area || "Area not added")}
-          </p>
-
-          ${
-            helper.phone
-              ? `<p>☎ ${escapeHTML(helper.phone)}</p>`
-              : ""
-          }
-
-          ${
-            helper.notes
-              ? `<p>📝 ${escapeHTML(helper.notes)}</p>`
-              : ""
-          }
-
-          <div class="card-buttons">
+            <p>
+              📍 ${escapeHTML(
+                helper.area ||
+                "Area not added"
+              )}
+            </p>
 
             ${
               helper.phone
                 ? `
-                  <button
-                    onclick="window.location.href='tel:${encodeURIComponent(helper.phone)}'"
-                  >
-                    CALL
-                  </button>
+                  <p>
+                    ☎ ${escapeHTML(
+                      helper.phone
+                    )}
+                  </p>
                 `
                 : ""
             }
 
-            <button
-              data-helper-delete="${escapeHTML(helper.id)}"
-            >
-              DELETE
-            </button>
+            ${
+              helper.notes
+                ? `
+                  <p>
+                    📝 ${escapeHTML(
+                      helper.notes
+                    )}
+                  </p>
+                `
+                : ""
+            }
+
+            <div class="card-buttons">
+
+              ${
+                helper.phone
+                  ? `
+                    <button
+                      onclick="window.location.href='tel:${encodeURIComponent(
+                        helper.phone
+                      )}'"
+                    >
+                      CALL
+                    </button>
+                  `
+                  : ""
+              }
+
+              <button
+                data-helper-delete="${escapeHTML(
+                  helper.id
+                )}"
+              >
+                DELETE
+              </button>
+
+            </div>
 
           </div>
 
-        </div>
-
-      `
-    ).join("");
+        `
+      )
+      .join("");
 
 
   elements.helpersList
@@ -2286,235 +3060,155 @@ function renderHelpers() {
 }
 
 
-$("helperSearch")
-  .addEventListener(
-    "input",
-    renderHelpers
-  );
+on(
+  "helperSearch",
+  "input",
+  renderHelpers
+);
 
 
 /* =========================================================
    SEARCH CONTROLS
    ========================================================= */
 
-$("searchBtn")
-  .addEventListener(
-    "click",
-    searchPlaces
-  );
+on(
+  "searchBtn",
+  "click",
+  searchPlaces
+);
 
 
-$("locateBtn")
-  .addEventListener(
-    "click",
-    locateUser
-  );
+on(
+  "locateBtn",
+  "click",
+  locateUser
+);
 
 
-$("mapLocateBtn")
-  .addEventListener(
-    "click",
-    () => {
+on(
+  "mapLocateBtn",
+  "click",
+  () => {
 
-      if (!state.userLocation) {
-        locateUser();
-        return;
-      }
-
-      state.map.setView(
-        [
-          state.userLocation.lat,
-          state.userLocation.lon
-        ],
-        16,
-        { animate: true }
-      );
-
-    }
-  );
-
-
-$("topLocateBtn")
-  .addEventListener(
-    "click",
-    () => {
-
-      showPage("explore");
+    if (!state.userLocation) {
 
       locateUser();
 
-    }
-  );
-
-
-$("emptyLocateBtn")
-  .addEventListener(
-    "click",
-    locateUser
-  );
-
-
-$("clearSearch")
-  .addEventListener(
-    "click",
-    () => {
-
-      elements.searchInput.value = "";
-
-      state.places = [];
-
-      clearPlaceMarkers();
-
-      renderResults();
-
-      elements.searchStatus.textContent =
-        "Ready to search";
+      return;
 
     }
-  );
 
 
-elements.searchInput
-  .addEventListener(
-    "keydown",
-    event => {
-
-      if (event.key === "Enter") {
-        searchPlaces();
-      }
-
-    }
-  );
-
-
-document
-  .querySelectorAll("[data-search]")
-  .forEach(button => {
-
-    button.addEventListener(
-      "click",
-      () => {
-
-        elements.searchInput.value =
-          button.dataset.search;
-
-        searchPlaces();
-
+    state.map.setView(
+      [
+        state.userLocation.lat,
+        state.userLocation.lon
+      ],
+      16,
+      {
+        animate: true
       }
     );
-
-  });
-
-
-document
-  .querySelectorAll("[data-category]")
-  .forEach(button => {
-
-    button.addEventListener(
-      "click",
-      () => {
-
-        showPage("explore");
-
-        elements.searchInput.value =
-          button.dataset.category;
-
-        if (!state.userLocation) {
-
-          locateUser();
-
-        } else {
-
-          searchPlaces();
-
-        }
-
-      }
-    );
-
-  });
-
-
-/* =========================================================
-   LOADING
-   ========================================================= */
-
-function showLoading(text) {
-
-  elements.loadingText.textContent =
-    text;
-
-  elements.loadingScreen.classList.add(
-    "show"
-  );
-
-}
-
-
-function hideLoading() {
-
-  elements.loadingScreen.classList.remove(
-    "show"
-  );
-
-}
-
-
-/* =========================================================
-   SECURITY / HTML HELPERS
-   ========================================================= */
-
-function escapeHTML(value) {
-
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-
-}
-
-
-function safeURL(url) {
-
-  try {
-
-    const parsed =
-      new URL(url);
-
-    if (
-      parsed.protocol === "http:" ||
-      parsed.protocol === "https:"
-    ) {
-      return parsed.href;
-    }
-
-  } catch (_) {}
-
-  return "#";
-
-}
-
-
-/* =========================================================
-   START
-   ========================================================= */
-
-document.addEventListener(
-  "DOMContentLoaded",
-  () => {
-
-    initMap();
-
-    renderHelpers();
-
-    renderFavourites();
-
-    /*
-      We don't automatically request location on page load.
-      The user intentionally presses LOCATE.
-    */
 
   }
 );
+
+
+on(
+  "topLocateBtn",
+  "click",
+  () => {
+
+    showPage(
+      "explore"
+    );
+
+    locateUser();
+
+  }
+);
+
+
+on(
+  "emptyLocateBtn",
+  "click",
+  locateUser
+);
+
+
+on(
+  "clearSearch",
+  "click",
+  () => {
+
+    if (elements.searchInput) {
+      elements.searchInput.value = "";
+    }
+
+
+    state.places = [];
+
+
+    clearPlaceMarkers();
+
+    renderResults();
+
+
+    if (elements.searchStatus) {
+      elements.searchStatus.textContent =
+        "Ready to search";
+    }
+
+  }
+);
+
+
+/* =========================================================
+   ENTER TO SEARCH
+   ========================================================= */
+
+if (elements.searchInput) {
+
+  elements.searchInput.addEventListener(
+    "keydown",
+    event => {
+
+      if (
+        event.key === "Enter"
+      ) {
+
+        event.preventDefault();
+
+        searchPlaces();
+
+      }
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   SEARCH SUGGESTIONS
+   ========================================================= */
+
+document
+  .querySelectorAll(
+    "[data-search]"
+  )
+  .forEach(button => {
+
+    button.addEventListener(
+      "click",
+      () => {
+
+        if (elements.searchInput) {
+
+          elements.searchInput.value =
+            button.dataset.search;
+
+        }
+
+
+        search
